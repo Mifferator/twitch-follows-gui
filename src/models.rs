@@ -103,3 +103,14 @@ pub struct FollowerCount {
     #[serde(rename = "totalCount")]
     pub total_count: u32,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct UserAvatarData {
+    pub user: Option<UserAvatarUser>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UserAvatarUser {
+    #[serde(rename = "profileImageURL")]
+    pub profile_image_url: Option<String>,
+}

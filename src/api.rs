@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tauri::Emitter;
 
-use crate::models::{Channel, ChannelAvatarData, ChannelFollowsData, FollowedAtData, GqlResponse};
+use crate::models::{Channel, ChannelAvatarData, ChannelFollowsData, FollowedAtData, GqlResponse, UserAvatarData};
 
 const TWITCH_GQL: &str = "https://gql.twitch.tv/gql";
 const TWITCH_INTEGRITY: &str = "https://gql.twitch.tv/integrity";
@@ -14,6 +14,13 @@ const FOLLOWS_USER_AGENT: &str = "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) Apple
 const CLIENT_ID: &str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const ORIGIN: &str = "https://www.twitch.tv";
+
+const GET_USER_AVATAR_QUERY: &str = "
+query GetUserAvatar($login: String!) {
+  user(login: $login) {
+    profileImageURL(width: 300)
+  }
+}";
 
 const GET_FOLLOWING_QUERY: &str = "
 query getFollowing($userLogin: String!, $cursor: Cursor) {
@@ -42,6 +49,11 @@ query getFollowing($userLogin: String!, $cursor: Cursor) {
 struct InlineGqlRequest<V: Serialize> {
     query: &'static str,
     variables: V,
+}
+
+#[derive(Serialize)]
+struct GetUserAvatarVars<'a> {
+    login: &'a str,
 }
 
 #[derive(Serialize)]
@@ -113,6 +125,28 @@ async fn fetch_integrity_token(
         .as_str()
         .map(|s| s.to_string())
         .ok_or_else(|| anyhow::anyhow!("no token in integrity response: {resp}"))
+}
+
+pub async fn fetch_user_avatar(
+    client: &reqwest::Client,
+    login: &str,
+) -> anyhow::Result<Option<String>> {
+    let body = InlineGqlRequest {
+        query: GET_USER_AVATAR_QUERY,
+        variables: GetUserAvatarVars { login },
+    };
+
+    let mut resp: Vec<GqlResponse<UserAvatarData>> = client
+        .post(TWITCH_GQL)
+        .header("Client-Id", FOLLOWS_CLIENT_ID)
+        .header("User-Agent", FOLLOWS_USER_AGENT)
+        .json(&[body])
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(resp.remove(0).data.user.and_then(|u| u.profile_image_url))
 }
 
 pub async fn fetch_follows(

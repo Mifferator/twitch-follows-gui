@@ -18,6 +18,7 @@ const loadingPanel  = document.getElementById('loading');
 const loadingTitle  = document.getElementById('loading-title');
 const progressBar   = document.getElementById('progress-bar');
 const loadingHint   = document.getElementById('loading-hint');
+const loadingAvatar = document.getElementById('loading-avatar');
 const errorPanel    = document.getElementById('error-panel');
 const tableWrap     = document.getElementById('table-wrap');
 const tableTitle    = document.getElementById('table-title');
@@ -163,6 +164,10 @@ async function search(username) {
   loadingTitle.textContent = `Fetching follows for '${username}'…`;
   progressBar.style.width  = '0%';
   loadingHint.textContent  = 'Fetching follows…';
+  loadingAvatar.src        = '';
+  invoke('fetch_user_avatar', { login: username })
+    .then(url => { if (url) loadingAvatar.src = url; })
+    .catch(() => {});
 
   let unlistenDetails = () => {};
   let unlistenMutuals = () => {};

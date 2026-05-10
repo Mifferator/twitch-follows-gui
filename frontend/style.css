@@ -147,6 +147,15 @@ html, body {
   color: var(--text-muted);
 }
 
+.loading-avatar {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--border);
+  margin-bottom: 8px;
+}
+
 /* Error */
 .error-panel {
   flex: 1;
