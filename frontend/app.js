@@ -24,6 +24,7 @@ const tableTitle    = document.getElementById('table-title');
 const channelRows   = document.getElementById('channel-rows');
 const listContainer = document.getElementById('list-container');
 const gridContainer = document.getElementById('grid-container');
+const gridSortBar   = document.getElementById('grid-sort-bar');
 const btnList       = document.getElementById('btn-list');
 const btnGrid       = document.getElementById('btn-grid');
 
@@ -47,8 +48,13 @@ function setLayout(view) {
   layoutView = view;
   listContainer.classList.toggle('hidden', view !== 'list');
   gridContainer.classList.toggle('hidden', view !== 'grid');
+  gridSortBar.classList.toggle('hidden', view !== 'grid');
   btnList.classList.toggle('active', view === 'list');
   btnGrid.classList.toggle('active', view === 'grid');
+  if (view === 'grid' && channels.length > 0) {
+    renderGrid();
+    updateGridSortBar();
+  }
 }
 
 btnList.addEventListener('click', () => setLayout('list'));
@@ -86,6 +92,13 @@ function sortedChannels() {
   return arr;
 }
 
+function applySort() {
+  renderTable();
+  updateSortHeaders();
+  renderGrid();
+  updateGridSortBar();
+}
+
 function updateSortHeaders() {
   document.querySelectorAll('th.sortable').forEach(th => {
     const arrow = th.querySelector('.sort-arrow');
@@ -99,6 +112,16 @@ function updateSortHeaders() {
   });
 }
 
+function updateGridSortBar() {
+  const labels = { name: 'Name', followers: 'Followers', date: 'Date', mutual: 'Mutual' };
+  document.querySelectorAll('.grid-sort-btn').forEach(btn => {
+    const col = btn.dataset.col;
+    const active = col === sortCol;
+    btn.classList.toggle('active', active);
+    btn.textContent = labels[col] + (active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+  });
+}
+
 document.querySelectorAll('th.sortable').forEach(th => {
   th.addEventListener('click', () => {
     const col = th.dataset.col;
@@ -108,8 +131,20 @@ document.querySelectorAll('th.sortable').forEach(th => {
       sortCol = col;
       sortDir = col === 'mutual' ? 'desc' : 'asc';
     }
-    renderTable();
-    updateSortHeaders();
+    applySort();
+  });
+});
+
+document.querySelectorAll('.grid-sort-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const col = btn.dataset.col;
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = col === 'mutual' ? 'desc' : 'asc';
+    }
+    applySort();
   });
 });
 
@@ -147,9 +182,7 @@ async function search(username) {
     loadingHint.textContent = 'Done';
 
     currentUsername = username;
-    renderTable();
-    renderGrid();
-    updateSortHeaders();
+    applySort();
     setLayout(layoutView);
 
     loadingPanel.classList.add('hidden');
@@ -208,7 +241,7 @@ function renderTable() {
 function renderGrid() {
   gridContainer.innerHTML = '';
 
-  for (const ch of channels) {
+  for (const ch of sortedChannels()) {
     const name = isAscii(ch.displayName) ? ch.displayName : ch.login;
 
     const card = document.createElement('div');
@@ -218,8 +251,14 @@ function renderGrid() {
       ? `<img class="card-avatar" src="${ch.profileImageURL}" alt="" loading="lazy">`
       : `<div class="card-avatar card-avatar-placeholder"></div>`;
     card.innerHTML += `<span class="card-name" title="${esc(name)}">${esc(name)}</span>`;
+    card.innerHTML += `<button class="card-search-btn" title="Search this user" aria-label="Search this user">${SEARCH_SVG}</button>`;
 
     card.addEventListener('click', () => invoke('open_channel', { login: ch.login }));
+    card.querySelector('.card-search-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      usernameInput.value = ch.login;
+      search(ch.login);
+    });
     gridContainer.appendChild(card);
   }
 }
