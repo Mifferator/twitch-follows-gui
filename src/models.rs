@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
 pub struct GqlResponse<T> {
@@ -44,7 +44,7 @@ pub struct FollowEdge {
     pub node: Channel,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Channel {
     pub login: String,
     #[serde(rename = "displayName")]
@@ -60,14 +60,14 @@ pub struct Channel {
     pub is_mutual: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Stream {
     pub game: Option<Game>,
     #[serde(rename = "viewersCount")]
     pub viewers_count: u32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Game {
     pub name: String,
 }

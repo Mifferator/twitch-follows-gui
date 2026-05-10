@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch Follows</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- View: username input -->
+  <div id="view-enter" class="view">
+    <div class="dialog-wrap">
+      <div class="dialog">
+        <label for="username-input">Twitch username</label>
+        <div class="input-row">
+          <input id="username-input" type="text" placeholder="Enter username..." autocomplete="off" spellcheck="false">
+          <button id="search-btn">Search</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- View: results -->
+  <div id="view-list" class="view hidden">
+
+    <!-- Loading state -->
+    <div id="loading" class="loading-panel hidden">
+      <p id="loading-title" class="loading-title"></p>
+      <div class="progress-track">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+      <p id="loading-hint" class="loading-hint"></p>
+    </div>
+
+    <!-- Error state -->
+    <div id="error-panel" class="error-panel hidden"></div>
+
+    <!-- Results -->
+    <div id="table-wrap" class="table-wrap hidden">
+
+      <div class="table-header-bar">
+        <button id="btn-back" class="back-btn" title="New search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </button>
+        <span id="table-title" class="table-title"></span>
+        <div class="view-toggle">
+          <button id="btn-list" class="toggle-btn active" title="List view">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button id="btn-grid" class="toggle-btn" title="Grid view">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- List view -->
+      <div id="list-container" class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-name sortable" data-col="name">Name <span class="sort-arrow"></span></th>
+              <th class="col-followers sortable" data-col="followers">Followers <span class="sort-arrow"></span></th>
+              <th class="col-date sortable" data-col="date">Followed Since (UTC) <span class="sort-arrow"></span></th>
+              <th class="col-mutual sortable" data-col="mutual">Mutual <span class="sort-arrow"></span></th>
+              <th class="col-search"></th>
+            </tr>
+          </thead>
+          <tbody id="channel-rows"></tbody>
+        </table>
+      </div>
+
+      <!-- Grid view -->
+      <div id="grid-container" class="grid-container hidden"></div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -6,51 +6,53 @@ on:
       - 'v*'
 
 jobs:
-  build:
-    name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+  release:
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact: twitch-follows-tui-linux-x86_64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact: twitch-follows-tui-macos-x86_64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact: twitch-follows-tui-macos-aarch64
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: twitch-follows-tui-windows-x86_64.exe
+          - os: macos-latest      # arm64 (Apple Silicon)
+          - os: macos-13          # x86_64 (Intel)
+          - os: ubuntu-22.04
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            pkg-config
+
+      - name: Generate icons from icons/icon.png
+        run: npx @tauri-apps/cli@^2 icon icons/icon.png
+
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
         with:
-          targets: ${{ matrix.target }}
+          workspaces: '. -> target'
 
-      - name: Install OpenSSL (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y pkg-config libssl-dev
-
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Stage binary (Unix)
-        if: matrix.os != 'windows-latest'
-        run: cp target/${{ matrix.target }}/release/twitch-follows-tui ${{ matrix.artifact }}
-
-      - name: Stage binary (Windows)
-        if: matrix.os == 'windows-latest'
-        run: cp target/${{ matrix.target }}/release/twitch-follows-tui.exe ${{ matrix.artifact }}
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - name: Build and publish Tauri release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: ${{ matrix.artifact }}
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Twitch Follows ${{ github.ref_name }}'
+          releaseBody: 'Download the installer for your platform below.'
+          releaseDraft: true
+          prerelease: false

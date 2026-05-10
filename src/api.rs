@@ -1,7 +1,6 @@
-use std::sync::mpsc;
 use serde::Serialize;
+use tauri::Emitter;
 
-use crate::app::Status;
 use crate::models::{Channel, ChannelAvatarData, ChannelFollowsData, FollowedAtData, GqlResponse};
 
 const TWITCH_GQL: &str = "https://gql.twitch.tv/gql";
@@ -116,17 +115,19 @@ async fn fetch_integrity_token(
         .ok_or_else(|| anyhow::anyhow!("no token in integrity response: {resp}"))
 }
 
-pub async fn fetch_follows(client: &reqwest::Client, login: &str, tx: mpsc::Sender<Status>) {
-    if let Err(e) = fetch_follows_inner(client, login, &tx).await {
-        tx.send(Status::Error(e)).ok();
-    }
+pub async fn fetch_follows(
+    client: &reqwest::Client,
+    login: &str,
+    app: &tauri::AppHandle,
+) -> anyhow::Result<Vec<Channel>> {
+    fetch_follows_inner(client, login, app).await
 }
 
 async fn fetch_follows_inner(
     client: &reqwest::Client,
     login: &str,
-    tx: &mpsc::Sender<Status>,
-) -> anyhow::Result<()> {
+    app: &tauri::AppHandle,
+) -> anyhow::Result<Vec<Channel>> {
     let mut channels: Vec<Channel> = Vec::new();
     let mut cursor: Option<String> = None;
 
@@ -171,14 +172,13 @@ async fn fetch_follows_inner(
     let device_id = random_device_id();
     let integrity_token = fetch_integrity_token(client, &device_id).await?;
 
-    tx.send(Status::LoadingDetails).ok();
+    app.emit("loading-details", ()).ok();
     fetch_follower_counts(client, &integrity_token, &device_id, &mut channels).await?;
 
-    tx.send(Status::LoadingMutuals).ok();
+    app.emit("loading-mutuals", ()).ok();
     fetch_mutuals(client, &integrity_token, &device_id, login, &mut channels).await?;
 
-    tx.send(Status::Loaded(channels)).ok();
-    Ok(())
+    Ok(channels)
 }
 
 async fn fetch_follower_counts(

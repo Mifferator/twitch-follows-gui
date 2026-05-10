@@ -1,107 +1,31 @@
 #![allow(dead_code)]
 
 mod api;
-mod app;
 mod models;
-mod ui;
 
-use std::{sync::mpsc, time::Duration};
-use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use models::Channel;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let result = run(&mut terminal).await;
-
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-
-    result
+#[tauri::command]
+async fn fetch_follows(username: String, app: tauri::AppHandle) -> Result<Vec<Channel>, String> {
+    let client = reqwest::Client::new();
+    api::fetch_follows(&client, &username, &app)
+        .await
+        .map_err(|e| e.to_string())
 }
 
-async fn run(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> anyhow::Result<()> {
-    let mut app = app::App::new();
-    let (tx, rx) = mpsc::channel::<app::Status>();
-    let client = reqwest::Client::new();
+#[tauri::command]
+fn open_channel(login: String) {
+    open::that(format!("https://twitch.tv/{login}")).ok();
+}
 
-    loop {
-        terminal.draw(|f| ui::draw(f, &mut app))?;
+#[tauri::command]
+fn quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
 
-        if let Ok(status) = rx.try_recv() {
-            match status {
-                app::Status::Loaded(channels) => app.set_channels(channels),
-                other => app.status = other,
-            }
-        }
-
-        if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    match app.page {
-                        app::Page::EnterName => match key.code {
-                            KeyCode::Esc => break,
-                            KeyCode::Backspace => { app.input.pop(); }
-                            KeyCode::Enter => {
-                                let username = app.input.clone();
-                                let tx = tx.clone();
-                                let client = client.clone();
-                                tokio::spawn(async move {
-                                    api::fetch_follows(&client, &username, tx).await;
-                                });
-                                app.submit();
-                            }
-                            KeyCode::Char(c) => app.input.push(c),
-                            _ => {}
-                        },
-                        app::Page::ListView => match key.code {
-                            KeyCode::Esc => {
-                                app.input.clear();
-                                app.page = app::Page::EnterName;
-                            }
-                            KeyCode::Char('q') => break,
-                            KeyCode::Down | KeyCode::Char('j') => app.next(),
-                            KeyCode::Up | KeyCode::Char('k') => app.previous(),
-                            KeyCode::Enter => {
-                                if let app::Status::Loaded(channels) = &app.status {
-                                    if let Some(i) = app.table_state.selected() {
-                                        let url = format!("https://twitch.tv/{}", channels[i].login);
-                                        open::that(url).ok();
-                                    }
-                                }
-                            }
-                            KeyCode::Char('c') => {
-                                if let app::Status::Loaded(channels) = &app.status {
-                                    if let Some(i) = app.table_state.selected() {
-                                        let login = channels[i].login.clone();
-                                        let next_input = login.clone();
-                                        let tx = tx.clone();
-                                        let client = client.clone();
-                                        tokio::spawn(async move {
-                                            api::fetch_follows(&client, &login, tx).await;
-                                        });
-                                        app.input = next_input;
-                                        app.submit();
-                                    }
-                                }
-                            }
-                            _ => {}
-                        },
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
+fn main() {
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![fetch_follows, open_channel, quit])
+        .run(tauri::generate_context!())
+        .expect("error running tauri app");
 }
