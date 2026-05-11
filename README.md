@@ -1,0 +1,3 @@
+# "Broken" DMG on MacOS
+The DMG isn't broken, it's complaining that the code isn't signed. I don't want to pay $99 a year to Apple to make a developer account so for now use the following work around
+- Enter `xattr -cr "/Applications/Twitch Follows.app"` into your terminal (replace path to app if it's different, but it should default to this)
