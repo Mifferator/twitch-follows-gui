@@ -284,10 +284,11 @@ th.sortable:hover { color: var(--text); }
 th.sort-active { color: var(--accent); }
 .sort-arrow { display: inline-block; width: 10px; }
 
-.col-name      { width: 34%; }
-.col-followers { width: 13%; }
-.col-date      { width: 28%; }
-.col-mutual    { width: 14%; }
+.col-name      { width: 31%; }
+.col-followers { width: 12%; }
+.col-date      { width: 25%; }
+.col-mutual    { width: 12%; }
+.col-mod       { width: 9%;  }
 .col-search    { width: 11%; }
 
 tbody tr {
@@ -353,6 +354,19 @@ td.date-cell {
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+td.mod-cell {
+  text-align: center;
+  padding: 4px 8px;
+}
+
+.mod-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: middle;
+  opacity: 0.85;
 }
 
 td.search-cell {

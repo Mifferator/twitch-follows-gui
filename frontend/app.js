@@ -87,6 +87,11 @@ function sortedChannels() {
         cmp = (a.is_mutual ? 1 : 0) - (b.is_mutual ? 1 : 0);
         break;
       }
+      case 'mod': {
+        const w = { mutual: 3, user_moderates: 2, channel_moderates: 1, none: 0 };
+        cmp = (w[a.mod_status] ?? 0) - (w[b.mod_status] ?? 0);
+        break;
+      }
     }
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -130,7 +135,7 @@ document.querySelectorAll('th.sortable').forEach(th => {
       sortDir = sortDir === 'asc' ? 'desc' : 'asc';
     } else {
       sortCol = col;
-      sortDir = col === 'mutual' ? 'desc' : 'asc';
+      sortDir = (col === 'mutual' || col === 'mod') ? 'desc' : 'asc';
     }
     applySort();
   });
@@ -143,7 +148,7 @@ document.querySelectorAll('.grid-sort-btn').forEach(btn => {
       sortDir = sortDir === 'asc' ? 'desc' : 'asc';
     } else {
       sortCol = col;
-      sortDir = col === 'mutual' ? 'desc' : 'asc';
+      sortDir = (col === 'mutual' || col === 'mod') ? 'desc' : 'asc';
     }
     applySort();
   });
@@ -171,15 +176,20 @@ async function search(username) {
 
   let unlistenDetails = () => {};
   let unlistenMutuals = () => {};
+  let unlistenMods    = () => {};
 
   try {
     unlistenDetails = await listen('loading-details', () => {
-      progressBar.style.width = '33%';
+      progressBar.style.width = '25%';
       loadingHint.textContent = 'Fetching follower counts…';
     });
     unlistenMutuals = await listen('loading-mutuals', () => {
-      progressBar.style.width = '66%';
+      progressBar.style.width = '50%';
       loadingHint.textContent = 'Checking mutuals…';
+    });
+    unlistenMods = await listen('loading-mods', () => {
+      progressBar.style.width = '75%';
+      loadingHint.textContent = 'Checking mod status…';
     });
 
     channels = await invoke('fetch_follows', { username });
@@ -200,12 +210,29 @@ async function search(username) {
   } finally {
     unlistenDetails();
     unlistenMutuals();
+    unlistenMods();
   }
 }
 
 // ── List rendering ─────────────────────────────────────────────────────────────
 
 const SEARCH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>`;
+
+const MOD_ICON_SRCS = {
+  user_moderates:    'icons/mod-channel.png',
+  channel_moderates: 'icons/mod-user.png',
+  mutual:            'icons/mod-mutual.png',
+};
+
+function modStatusIcon(status) {
+  const src = MOD_ICON_SRCS[status];
+  if (!src) return '';
+  const alt =
+    status === 'user_moderates'    ? `${currentUsername} moderates this channel` :
+    status === 'channel_moderates' ? `This channel moderates ${currentUsername}` :
+                                     `${currentUsername} and this channel are mutual moderators`;
+  return `<img class="mod-icon" src="${src}" alt="${esc(alt)}" title="${esc(alt)}">`;
+}
 
 function renderTable() {
   tableTitle.textContent = `${currentUsername}'s Following (${channels.length.toLocaleString()} results)`;
@@ -225,6 +252,7 @@ function renderTable() {
       <td class="followers-cell">${followers}</td>
       <td class="date-cell">${esc(date)}</td>
       <td>${ch.is_mutual ? '<span class="mutual-badge">mutual</span>' : ''}</td>
+      <td class="mod-cell">${modStatusIcon(ch.mod_status)}</td>
       <td class="search-cell">
         <button class="search-icon-btn" title="Search this user" aria-label="Search this user">${SEARCH_SVG}</button>
       </td>

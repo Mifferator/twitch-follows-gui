@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tauri::Emitter;
 
-use crate::models::{Channel, ChannelAvatarData, ChannelFollowsData, FollowedAtData, GqlResponse, UserAvatarData};
+use crate::models::{Channel, ChannelAvatarData, ChannelFollowsData, FollowedAtData, GqlResponse, ModStatus, UserAvatarData, UserModStatusData};
 
 const TWITCH_GQL: &str = "https://gql.twitch.tv/gql";
 const TWITCH_INTEGRITY: &str = "https://gql.twitch.tv/integrity";
@@ -25,6 +25,7 @@ query GetUserAvatar($login: String!) {
 const GET_FOLLOWING_QUERY: &str = "
 query getFollowing($userLogin: String!, $cursor: Cursor) {
   user(login: $userLogin) {
+    id
     follows(first: 100, after: $cursor) {
       totalCount
       pageInfo { hasNextPage }
@@ -32,6 +33,7 @@ query getFollowing($userLogin: String!, $cursor: Cursor) {
         cursor
         followedAt
         node {
+          id
           login
           displayName
           profileImageURL(width: 150)
@@ -54,6 +56,14 @@ struct InlineGqlRequest<V: Serialize> {
 #[derive(Serialize)]
 struct GetUserAvatarVars<'a> {
     login: &'a str,
+}
+
+#[derive(Serialize)]
+struct UserModStatusVars<'a> {
+    #[serde(rename = "channelID")]
+    channel_id: &'a str,
+    #[serde(rename = "userID")]
+    user_id: &'a str,
 }
 
 #[derive(Serialize)]
@@ -127,6 +137,66 @@ async fn fetch_integrity_token(
         .ok_or_else(|| anyhow::anyhow!("no token in integrity response: {resp}"))
 }
 
+pub async fn check_mod_status(
+    client: &reqwest::Client,
+    channel_id: &str,
+    user_id: &str,
+) -> anyhow::Result<(bool, bool)> {
+    let device_id = random_device_id();
+    let integrity_token = fetch_integrity_token(client, &device_id).await?;
+    let pairs = [
+        (channel_id.to_string(), user_id.to_string()),
+        (user_id.to_string(), channel_id.to_string()),
+    ];
+    let results = fetch_mod_status(client, &integrity_token, &device_id, &pairs).await?;
+    Ok((results[0], results[1]))
+}
+
+async fn fetch_mod_status(
+    client: &reqwest::Client,
+    integrity_token: &str,
+    device_id: &str,
+    pairs: &[(String, String)],
+) -> anyhow::Result<Vec<bool>> {
+    let mut results = Vec::with_capacity(pairs.len());
+
+    for chunk in pairs.chunks(35) {
+        let body: Vec<_> = chunk.iter().map(|(channel_id, user_id)| GqlRequest {
+            operation_name: "UserModStatus",
+            variables: UserModStatusVars { channel_id, user_id },
+            extensions: Extensions {
+                persisted_query: PersistedQuery {
+                    version: 1,
+                    sha256_hash: "511b58faf547070bc95b7d32e7b5cdedf8c289a3aeabfc3c5d3ece2de01ae06f",
+                },
+            },
+        }).collect();
+
+        let resp: Vec<GqlResponse<UserModStatusData>> = client
+            .post(TWITCH_GQL)
+            .header("Client-Id", CLIENT_ID)
+            .header("Client-Integrity", integrity_token)
+            .header("X-Device-Id", device_id)
+            .header("User-Agent", USER_AGENT)
+            .header("Origin", ORIGIN)
+            .header("Referer", ORIGIN)
+            .json(&body)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        for r in resp {
+            let is_mod = r.data.user
+                .map(|u| u.is_moderator)
+                .unwrap_or(false);
+            results.push(is_mod);
+        }
+    }
+
+    Ok(results)
+}
+
 pub async fn fetch_user_avatar(
     client: &reqwest::Client,
     login: &str,
@@ -164,6 +234,7 @@ async fn fetch_follows_inner(
 ) -> anyhow::Result<Vec<Channel>> {
     let mut channels: Vec<Channel> = Vec::new();
     let mut cursor: Option<String> = None;
+    let mut searched_user_id: Option<String> = None;
 
     loop {
         let body = InlineGqlRequest {
@@ -184,7 +255,14 @@ async fn fetch_follows_inner(
             .json()
             .await?;
 
-        let follows = match resp.remove(0).data.user.and_then(|u| u.follows) {
+        let user = match resp.remove(0).data.user {
+            Some(u) => u,
+            None => break,
+        };
+        if searched_user_id.is_none() {
+            searched_user_id = Some(user.id.clone());
+        }
+        let follows = match user.follows {
             Some(f) => f,
             None => break,
         };
@@ -212,7 +290,42 @@ async fn fetch_follows_inner(
     app.emit("loading-mutuals", ()).ok();
     fetch_mutuals(client, &integrity_token, &device_id, login, &mut channels).await?;
 
+    if let Some(uid) = searched_user_id {
+        app.emit("loading-mods", ()).ok();
+        fetch_mod_statuses(client, &integrity_token, &device_id, &uid, &mut channels).await?;
+    }
+
     Ok(channels)
+}
+
+async fn fetch_mod_statuses(
+    client: &reqwest::Client,
+    integrity_token: &str,
+    device_id: &str,
+    user_id: &str,
+    channels: &mut Vec<Channel>,
+) -> anyhow::Result<()> {
+    // Interleaved pairs: (channel→user, user→channel) for each channel.
+    // fetch_mod_status chunks these at 35, results come back in the same order.
+    let pairs: Vec<(String, String)> = channels.iter()
+        .flat_map(|c| [
+            (c.id.clone(), user_id.to_string()),   // is searched user a mod in this channel?
+            (user_id.to_string(), c.id.clone()),   // is this channel owner a mod in searched user's channel?
+        ])
+        .collect();
+
+    let results = fetch_mod_status(client, integrity_token, device_id, &pairs).await?;
+
+    for (i, channel) in channels.iter_mut().enumerate() {
+        channel.mod_status = match (results[i * 2], results[i * 2 + 1]) {
+            (true,  true)  => ModStatus::Mutual,
+            (true,  false) => ModStatus::UserModerates,
+            (false, true)  => ModStatus::ChannelModerates,
+            _              => ModStatus::None,
+        };
+    }
+
+    Ok(())
 }
 
 async fn fetch_follower_counts(

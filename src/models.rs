@@ -18,6 +18,7 @@ pub struct ChannelFollowsData {
 
 #[derive(Deserialize, Debug)]
 pub struct User {
+    pub id: String,
     pub follows: Option<FollowConnection>,
 }
 
@@ -44,8 +45,19 @@ pub struct FollowEdge {
     pub node: Channel,
 }
 
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ModStatus {
+    #[default]
+    None,
+    UserModerates,
+    ChannelModerates,
+    Mutual,
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Channel {
+    pub id: String,
     pub login: String,
     #[serde(rename = "displayName")]
     pub display_name: String,
@@ -58,6 +70,8 @@ pub struct Channel {
     pub followed_at: Option<String>,
     #[serde(default)]
     pub is_mutual: bool,
+    #[serde(default)]
+    pub mod_status: ModStatus,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -113,4 +127,15 @@ pub struct UserAvatarData {
 pub struct UserAvatarUser {
     #[serde(rename = "profileImageURL")]
     pub profile_image_url: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UserModStatusData {
+    pub user: Option<UserModStatusUser>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UserModStatusUser {
+    #[serde(rename = "isModerator")]
+    pub is_moderator: bool,
 }
