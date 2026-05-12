@@ -1,2 +1,6 @@
 /target
 /gen
+
+# an icon is required to build locally
+# real icons will be generated from icon.png during the build process
+/icons/icon.ico
